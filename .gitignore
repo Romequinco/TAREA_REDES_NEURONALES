@@ -208,6 +208,7 @@ __marimo__/
 
 
 #documentacion para mayor simpleza del repositorio
-.docs
-.claude
+docs/
+.claude/
+
 
