@@ -26,12 +26,8 @@ TAREA_REDES_NEURONALES/
 │   └── 08_carteras.ipynb         # Carteras 2025: Buy&Hold vs NN
 ├── models/                        # Modelos .keras guardados (mejor por tipo)
 ├── results/                       # CSVs opcionales de resultados
-├── docs/
-│   ├── *.ipynb                   # Notebooks de referencia del profesor
-│   └── resumenes/                # Material teórico del curso
 ├── architecture.md               # Arquitectura del sistema y flujo de datos
 ├── decisionsmade.md              # Registro de decisiones de diseño
-└── .claude/CLAUDE.md             # Contexto para Claude Code
 ```
 
 ---
