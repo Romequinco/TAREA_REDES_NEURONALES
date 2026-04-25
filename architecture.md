@@ -52,7 +52,8 @@ from utils import TICKERS, create_time_series_data, make_splits, ...
 | `make_splits` | `(X, y, seed) → X_tr, X_v, X_ts, y_tr, y_v, y_ts` | Partición en dos pasos, shuffle=False |
 | `eval_mae` | `(model, X, y) → float` | MAE medio sobre los 23 activos |
 | `eval_mae_naive` | `(X, y) → float` | MAE del último valor conocido |
-| `get_callbacks` | `(patience_es, patience_lr) → list` | EarlyStopping + ReduceLROnPlateau |
+| `get_callbacks` | `(patience_lr) → list` | ReduceLROnPlateau + ModelCheckpoint |
+| `restore_best_weights` | `(model)` | Restaura pesos del mejor epoch tras fit() |
 | `compile_model` | `(model, lr) → model` | MAE loss + Adam; estándar para todos los modelos |
 | `build_results_df` | `(results) → DataFrame` | Dict → MultiIndex (modelo, V_in, V_out) |
 | `best_per_window` | `(df, metric) → DataFrame 4×4` | Mejor MAE por combinación de ventanas |
@@ -72,8 +73,8 @@ y : (N, 23)         — promedio de cierres futuros (target)
 
 ### Partición cronológica
 ```
-|──────────── train (~85.5%) ────────────|── val (~4.5%) ──|── test (10%) ──|
-                                          ↑ no shuffle en ningún paso
+|──────────── train (~72%) ────────────|──── val (~18%) ────|── test (10%) ──|
+                                        ↑ no shuffle en ningún paso
 ```
 
 ### Formato de resultados (dict estándar)
@@ -143,13 +144,14 @@ Descomentando líneas en el dict `MODELOS` de cada notebook:
 model = compile_model(Sequential([...]))   # MAE + Adam(lr=3e-4)
 hist  = model.fit(X_tr, y_tr,
                   validation_data=(X_v, y_v),
-                  epochs=EPOCHS,           # 100 (20 en QUICK_MODE)
+                  epochs=EPOCHS,           # 300 (50 en QUICK_MODE)
                   batch_size=64,
-                  callbacks=get_callbacks(),   # EarlyStopping + ReduceLR
+                  callbacks=get_callbacks(),   # ReduceLR + ModelCheckpoint
                   verbose=0)
+restore_best_weights(model)   # recupera el mejor epoch
 ```
 
-EarlyStopping con `restore_best_weights=True` deja el modelo en el mejor estado sin guardar a disco. El bucle de entrenamiento es idéntico en todos los notebooks 02–05.
+Sin EarlyStopping: el modelo entrena todas las épocas para ver la curva completa. `ModelCheckpoint` guarda el mejor estado en disco temporal; `restore_best_weights(model)` lo recupera al finalizar. El bucle de entrenamiento es idéntico en todos los notebooks 02–05.
 
 ---
 
@@ -184,5 +186,5 @@ Datos históricos hasta 2024
 
 - Cada notebook es autocontenido: importa desde `src/utils.py` y descarga sus propios datos.
 - Los marcadores `# [EXTENDER]` indican código comentado listo para activarse.
-- `QUICK_MODE = True` reduce `EPOCHS` a 20 en todos los notebooks 01–05.
+- `QUICK_MODE = True` reduce `EPOCHS` a 50 en todos los notebooks 02–05.
 - Los dicts `results` de cada notebook se agregan manualmente en `06_resultados.ipynb`.

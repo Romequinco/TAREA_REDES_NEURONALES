@@ -51,11 +51,11 @@ Python 3.12 · Keras 3.x (backend TensorFlow) · Compatible con Google Colab y V
 Ejecutar los notebooks en orden. Para una prueba rápida (CPU, ~1 hora):
 
 ```python
-# Al inicio de cada notebook 01–05:
-QUICK_MODE = True   # reduce EPOCHS de 100 a 20
+# Al inicio de cada notebook 02–05:
+QUICK_MODE = True   # reduce EPOCHS de 300 a 50
 ```
 
-Flujo completo (~4-5 horas en CPU con EPOCHS=100):
+Flujo completo (~8-12 horas en CPU con EPOCHS=300):
 
 ```
 00_datos → 01_baselines → 02_mlp → 03_recurrentes → 04_convolucionales → 05_mixtos

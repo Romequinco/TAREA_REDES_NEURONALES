@@ -7,8 +7,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import tempfile
 from sklearn.model_selection import train_test_split
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from keras.callbacks import ReduceLROnPlateau, ModelCheckpoint
+
+_CKPT_PATH = tempfile.mktemp(suffix='.keras')
 
 # ── CONSTANTES GLOBALES ───────────────────────────────────────────────────────
 TICKERS = ['AEP','BA','CAT','CNP','CVX','DIS','DTE','ED','GD','GE',
@@ -43,15 +46,16 @@ def create_time_series_data(data, V_in, V_out):
 
 def make_splits(X, y, seed=RANDOM_SEED):
     """
-    Partición EXACTA del profesor (dos pasos, shuffle=False):
+    Partición en dos pasos, shuffle=False (orden cronológico obligatorio):
       Paso 1 → 90 % train_full / 10 % test
-      Paso 2 → 95 % train    /  5 % val  (del train_full)
-    Resultado: ~85.5 % train / ~4.5 % val / 10 % test
+      Paso 2 → 80 % train    / 20 % val  (del train_full)
+    Resultado: ~72 % train / ~18 % val / 10 % test
+    20% de val (vs. 5% original) da señal más robusta para ReduceLROnPlateau y ModelCheckpoint.
     """
     X_tr_full, X_ts, y_tr_full, y_ts = train_test_split(
         X, y, test_size=0.10, shuffle=False, random_state=seed)
     X_tr, X_v, y_tr, y_v = train_test_split(
-        X_tr_full, y_tr_full, test_size=0.05, shuffle=False, random_state=seed)
+        X_tr_full, y_tr_full, test_size=0.20, shuffle=False, random_state=seed)
     return X_tr, X_v, X_ts, y_tr, y_v, y_ts
 
 
@@ -68,17 +72,23 @@ def eval_mae_naive(X, y):
 
 
 # ── ENTRENAMIENTO ─────────────────────────────────────────────────────────────
-def get_callbacks(patience_es=10, patience_lr=5):
+def get_callbacks(patience_lr=5):
     """
-    EarlyStopping + ReduceLROnPlateau sobre val_loss.
-    restore_best_weights=True: el modelo queda en el mejor estado sin guardar a disco.
+    ReduceLROnPlateau + ModelCheckpoint sobre val_loss.
+    Sin EarlyStopping: entrena todas las épocas para ver la curva completa.
+    Llamar restore_best_weights(model) tras model.fit() para recuperar el mejor estado.
     """
     return [
-        EarlyStopping(monitor='val_loss', patience=patience_es,
-                      restore_best_weights=True, verbose=0),
         ReduceLROnPlateau(monitor='val_loss', factor=0.5,
                           patience=patience_lr, min_lr=1e-6, verbose=0),
+        ModelCheckpoint(_CKPT_PATH, monitor='val_loss',
+                        save_best_only=True, verbose=0),
     ]
+
+
+def restore_best_weights(model):
+    """Restaura los pesos del mejor epoch guardado por ModelCheckpoint."""
+    model.load_weights(_CKPT_PATH)
 
 
 def compile_model(model, lr=3e-4):

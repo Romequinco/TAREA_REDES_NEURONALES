@@ -34,9 +34,9 @@ RANDOM_SEED = 42
 # Paso 1: 90/10 — shuffle=False obligatorio para respetar orden cronológico
 X_tr_full, X_ts, y_tr_full, y_ts = train_test_split(
     X, y, test_size=0.10, shuffle=False, random_state=RANDOM_SEED)
-# Paso 2: 5% del train_full para validación
+# Paso 2: 20% del train_full para validación (~18% del total)
 X_tr, X_v, y_tr, y_v = train_test_split(
-    X_tr_full, y_tr_full, test_size=0.05, shuffle=False, random_state=RANDOM_SEED)
+    X_tr_full, y_tr_full, test_size=0.20, shuffle=False, random_state=RANDOM_SEED)
 ```
 
 ### Ventanas a estudiar (16 combinaciones = 16 experimentos por modelo)
@@ -130,8 +130,11 @@ Los tres notebooks en `docs/` son el punto de partida. **No modificar la funció
 model.compile(loss='mean_absolute_error', optimizer=Adam(learning_rate=3e-4))
 
 # Callbacks (encapsulados en get_callbacks() de utils.py)
-EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+# Sin EarlyStopping — el modelo entrena todas las épocas para ver la curva completa
 ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-6)
+ModelCheckpoint(tmp_path, monitor='val_loss', save_best_only=True)
+# Tras model.fit() — obligatorio en todos los notebooks:
+restore_best_weights(model)
 ```
 
 ---
