@@ -1,6 +1,6 @@
 # Taller B3-T4/T5/T6 — Redes Neuronales para Forecasting Financiero
 
-Taller universitario de Máster. Predice el precio de cierre promedio de 23 activos del SP500 usando redes neuronales, evaluado por MAE sobre 16 combinaciones de ventanas temporales.
+Taller universitario de Máster. Predice el precio de cierre promedio de 23 activos del SP500 usando redes neuronales, evaluado por MAE sobre 16 combinaciones de ventanas temporales..
 
 - **Entrega**: 21 de Mayo de 2026 · 18:00 · Aula Virtual
 - **Entregables**: Repositorio GitHub público + presentación PDF (5 min)
