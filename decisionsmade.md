@@ -220,3 +220,23 @@ Permite al equipo ir más allá de 64 modelos sin cambiar la estructura. Cada l�
 **Decisión**: Flag booleano al inicio de cada notebook, `EPOCHS = 50` cuando activo
 
 Permite probar que todo el flujo funciona en ~1-2 horas antes del entrenamiento completo (~8-12 horas con 300 épocas). Se activa localmente sin cambiar ningún otro parámetro.
+
+---
+
+## D25 — Learning rate de `mlp_s`: 3e-4 → 1e-4
+
+**Decisión**: `Adam(learning_rate=1e-4)` en `build_mlp` del notebook 02 (solo MLP)
+
+El LR global de `utils.py` (`compile_model` default = 3e-4) no se modifica para no
+afectar a LSTM, GRU y Conv, que no han sido diagnosticados todavía.
+
+**Evidencia (Evidencia 3, 300 épocas, 16 combinaciones):**
+- Baseline LR=3e-4: best epoch 3–28 en 15/16 combinaciones (convergencia demasiado rápida)
+- Variante LR=1e-4: best epoch 8–300 — 14/16 celdas mejoran best_epoch
+- Δval_min máximo: +0.00009 (umbral de rechazo: 0.0005) → sin coste en calidad
+- Casos marginales: (10,90) ruido estadístico; (90,30) Δval=+0.00008, best_ep−1
+
+**Efecto por grupo:**
+- V_in=5,10 (dropout=0.0): best_ep pasa de ~10 a ~290 — aprendizaje distribuido en más épocas
+- V_in=30,90 (dropout=0.1–0.2): mejora modesta (best_ep sube ~2–22 épocas)
+  porque el dropout ya actúa como regularizador y limita el efecto del LR

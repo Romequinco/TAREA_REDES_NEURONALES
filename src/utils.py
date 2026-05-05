@@ -72,15 +72,15 @@ def eval_mae_naive(X, y):
 
 
 # ── ENTRENAMIENTO ─────────────────────────────────────────────────────────────
-def get_callbacks(patience_lr=5):
+def get_callbacks(patience_lr=15):
     """
     ReduceLROnPlateau + ModelCheckpoint sobre val_loss.
     Sin EarlyStopping: entrena todas las épocas para ver la curva completa.
     Llamar restore_best_weights(model) tras model.fit() para recuperar el mejor estado.
     """
     return [
-        ReduceLROnPlateau(monitor='val_loss', factor=0.5,
-                          patience=patience_lr, min_lr=1e-6, verbose=0),
+        ReduceLROnPlateau(monitor='val_loss', factor=0.9,
+                          patience=patience_lr, min_lr=1e-5, verbose=0),
         ModelCheckpoint(_CKPT_PATH, monitor='val_loss',
                         save_best_only=True, verbose=0),
     ]
