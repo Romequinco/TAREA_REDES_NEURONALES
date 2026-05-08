@@ -240,3 +240,19 @@ afectar a LSTM, GRU y Conv, que no han sido diagnosticados todavía.
 - V_in=5,10 (dropout=0.0): best_ep pasa de ~10 a ~290 — aprendizaje distribuido en más épocas
 - V_in=30,90 (dropout=0.1–0.2): mejora modesta (best_ep sube ~2–22 épocas)
   porque el dropout ya actúa como regularizador y limita el efecto del LR
+
+---
+
+## D26 — L2=1e-4 en Dense(64) de mlp_s
+
+**Decisión**: `kernel_regularizer=l2(1e-4)` en la capa Dense(64) de `build_mlp`
+
+Diagnóstico Paso 2: variante L2=1e-4 a 150 épocas vs referencia D25 (LR=1e-4, sin L2, 300 épocas).
+
+**Resultados:**
+- val_min mejora en 15/16 combinaciones; único caso con Δval > 0: (90,1) con +0.00004 (< umbral 0.0005)
+- best_epoch mejora en 10/11 casos comparables (ref_ep ≤ 150); único empate: (30,90) con ref_ep=var_ep=34
+- V_in=30,90 (objetivo): best_ep prácticamente se dobla (8→18 en (90,1), 11→23 en (90,5), etc.); mayor ganancia en (90,90): Δval=−0.00026
+- V_in=5,10 V_out alto (capped, ref_ep > 150): best_ep colapsa 287–300→31–43 porque LR=1e-4 + L2 se combinan para acelerar convergencia. Sin impacto en calidad (restore_best_weights captura el mínimo independientemente)
+
+**Evidencia**: Paso 2 (celda cb6f19ae) + Evidencia 4 (celda d5f2c8e9) del notebook 02.
