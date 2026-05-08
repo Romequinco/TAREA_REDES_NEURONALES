@@ -48,14 +48,13 @@ def make_splits(X, y, seed=RANDOM_SEED):
     """
     Partición en dos pasos, shuffle=False (orden cronológico obligatorio):
       Paso 1 → 90 % train_full / 10 % test
-      Paso 2 → 80 % train    / 20 % val  (del train_full)
-    Resultado: ~72 % train / ~18 % val / 10 % test
-    20% de val (vs. 5% original) da señal más robusta para ReduceLROnPlateau y ModelCheckpoint.
+      Paso 2 → 75 % train    / 25 % val  (del train_full)
+    25% de val (vs. 5% original) da señal más robusta para ReduceLROnPlateau y ModelCheckpoint.
     """
     X_tr_full, X_ts, y_tr_full, y_ts = train_test_split(
         X, y, test_size=0.10, shuffle=False, random_state=seed)
     X_tr, X_v, y_tr, y_v = train_test_split(
-        X_tr_full, y_tr_full, test_size=0.20, shuffle=False, random_state=seed)
+        X_tr_full, y_tr_full, test_size=0.25, shuffle=False, random_state=seed)
     return X_tr, X_v, X_ts, y_tr, y_v, y_ts
 
 
