@@ -16,15 +16,24 @@ El enunciado del taller exige MAE como métrica de evaluación. Los notebooks de
 
 **Decisión**: `Adam(learning_rate=3e-4)`
 
-Adam es la primera opción recomendada en el material teórico (`training-nn-2026.md`). `lr=3e-4` es el valor estándar para Adam en problemas de regresión con este rango de valores de target. Mismo valor que usan los notebooks del profesor.
+Adam es la primera opción recomendada en el material teórico (`training-nn-2026.md`). `lr=3e-4` es el valor estándar para Adam en problemas de regresión con este rango de valores de target. Mismo valor que usan los notebooks del profesor. Excepción: `mlp_s` usa `lr=1e-4` (ver D25).
 
 ---
 
 ## D3 — Número máximo de épocas
 
-**Decisión**: `EPOCHS = 300` sin EarlyStopping
+**Decisión**: `EPOCHS` variable por notebook; sin EarlyStopping
 
-El profesor indicó que EarlyStopping oculta el comportamiento real del entrenamiento y hace las curvas incomparables entre modelos. 300 épocas permiten ver la curva completa: convergencia, plateau y eventual overfitting. `QUICK_MODE = True` reduce a 50 épocas para pruebas rápidas.
+El profesor indicó que EarlyStopping oculta el comportamiento real del entrenamiento y hace las curvas incomparables entre modelos.
+
+| Notebook | EPOCHS | Motivo |
+|----------|--------|--------|
+| 02_mlp | 50 (QUICK_MODE=True) | Colapso confirmado en <50 épocas; QUICK_MODE no se desactivó en producción |
+| 03_recurrentes | 300 | Estándar del taller |
+| 04_convolucionales | 700 | Curvas completas sin QUICK_MODE |
+| 05_mixtos | 500 | Balance tiempo/convergencia |
+
+`QUICK_MODE = True` reduce a 50 épocas para pruebas rápidas (flag al inicio de cada notebook).
 
 ---
 
@@ -32,7 +41,7 @@ El profesor indicó que EarlyStopping oculta el comportamiento real del entrenam
 
 **Decisión**: `BATCH_SIZE = 64`
 
-Balance entre velocidad de entrenamiento (batches grandes = menos actualizaciones por época) y calidad del gradiente (batches pequeños = más ruido, potencialmente mejor generalización). 64 es CPU-friendly y estándar para este tipo de problemas.
+Balance entre velocidad de entrenamiento y calidad del gradiente. 64 es CPU-friendly y estándar para este tipo de problemas.
 
 ---
 
@@ -48,9 +57,9 @@ Balance entre velocidad de entrenamiento (batches grandes = menos actualizacione
 
 ## D6 — Guardado de modelos
 
-**Decisión**: `ModelCheckpoint` con ruta temporal durante el bucle; guardado manual del ganador global tras `06_resultados.ipynb`
+**Decisión**: `ModelCheckpoint` con ruta temporal durante el bucle; sin persistencia entre notebooks
 
-El checkpoint temporal (`tempfile.mktemp(suffix='.keras')`) se sobreescribe en cada entrenamiento — solo persiste el mejor epoch del modelo actual. Evita acumular 80+ archivos `.keras` durante el bucle. El usuario guarda el ganador final en `models/` si lo necesita.
+El checkpoint temporal (`tempfile.mktemp(suffix='.keras')`) se sobreescribe en cada entrenamiento — solo persiste el mejor epoch del modelo actual. Evita acumular 256 archivos `.keras` durante el bucle.
 
 ---
 
@@ -67,7 +76,7 @@ X_tr, X_v, y_tr, y_v = train_test_split(
     X_tr_full, y_tr_full, test_size=0.20, shuffle=False, random_state=42)
 ```
 
-`shuffle=False` es obligatorio para series temporales financieras: mezclar rompería el orden cronológico y produciría data leakage del futuro al pasado. Esta partición produce ~72% train / ~18% val / 10% test. El 20% de val (vs. 5% original del profesor) da señal más robusta para `ReduceLROnPlateau` y `ModelCheckpoint` al haber eliminado EarlyStopping; la pérdida de ~700 muestras de train es irrelevante con ~13.500 disponibles.
+`shuffle=False` es obligatorio para series temporales financieras. Esta partición produce ~72% train / ~18% val / 10% test. El 20% de val (vs. 5% original del profesor) da señal más robusta para `ReduceLROnPlateau` y `ModelCheckpoint` al haber eliminado EarlyStopping.
 
 ---
 
@@ -83,24 +92,25 @@ La función genera `X:(N, V_in, N_assets)` e `y:(N, N_assets)` como promedio de 
 
 **Decisión**: Naive (último valor conocido) + Regresión Lineal (sklearn)
 
-- **Naive**: `y_pred = X[:, -1, :]` — predice el último retorno observado. Es el benchmark más difícil de superar en mercados eficientes.
-- **Lineal**: `LinearRegression` de sklearn sobre X aplanado. Es el baseline explícito del profesor con MAEs de referencia ya documentados.
+- **Naive**: `y_pred = X[:, -1, :]` — predice el último retorno observado.
+- **Lineal**: `LinearRegression` de sklearn sobre X aplanado. Baseline explícito del profesor.
 
 ---
 
-## D10 — Modelos activos en la competición (mínimo 64)
+## D10 — Modelos activos y total de entrenamientos
 
-**Decisión**: 5 modelos NN × 16 combinaciones = 80 entrenamientos
+**Decisión**: 14 modelos NN × 16 combinaciones = 224 entrenamientos de red neuronal (256 totales incluyendo baselines)
 
-| Modelo | Notebook | Param aprox |
-|--------|----------|------------|
-| mlp_s (Dense 64) | 02 | ~6K |
-| lstm_s (LSTM 64) | 03 | ~22K |
-| gru_s (GRU 64) | 03 | ~17K |
-| conv_s (Conv1D 64 + GAP) | 04 | ~5K |
-| conv_lstm (Conv1D + LSTM) | 05 | ~26K |
+| Notebook | Modelos activos | Entrenamientos |
+|----------|----------------|----------------|
+| 01_baselines | naive, lineal | 32 |
+| 02_mlp | mlp_s | 16 |
+| 03_recurrentes | simple_rnn, gru, lstm, lstm_stack, bi_gru, lstm_drop | 96 |
+| 04_convolucionales | conv_s | 16 |
+| 05_mixtos | conv_lstm_ln, conv_gru_bottleneck, conv_bilstm, conv2_lstm, lstm_dense, conv_dense | 96 |
+| **Total** | **16 modelos** | **256** |
 
-Supera el mínimo de 64 con 2 modelos recurrentes (32 entrenamientos cada uno cuenta). Modelos adicionales están disponibles descomentando `[EXTENDER]`.
+Supera ampliamente el mínimo de 64 entrenamientos requerido.
 
 ---
 
@@ -108,7 +118,7 @@ Supera el mínimo de 64 con 2 modelos recurrentes (32 entrenamientos cada uno cu
 
 **Decisión**: Flatten a `(N, V_in * 23)` con `X.reshape(N, -1)`
 
-MLP no admite entrada 3D nativa. El flatten es la transformación estándar y la que usan los notebooks del profesor.
+MLP no admite entrada 3D nativa. El flatten es la transformación estándar y la que usan los notebooks del profesor. Como consecuencia, el MLP pierde completamente la estructura temporal — V_in no aporta información más allá del primer día.
 
 ---
 
@@ -116,7 +126,7 @@ MLP no admite entrada 3D nativa. El flatten es la transformación estándar y la
 
 **Decisión**: `kernel_size=3`
 
-Kernel mínimo para capturar patrones locales de al menos 3 días. Compatible con `V_in=5` (el mínimo en `INPUT_WINDOWS`). Un kernel mayor (5, 7) requeriría `V_in` más grandes y reduciría la longitud de salida significativamente.
+Kernel mínimo para capturar patrones locales de al menos 3 días. Compatible con `V_in=5` (el mínimo en `INPUT_WINDOWS`). `padding='same'` en modelos mixtos para preservar la longitud de secuencia en V_in pequeños.
 
 ---
 
@@ -124,7 +134,7 @@ Kernel mínimo para capturar patrones locales de al menos 3 días. Compatible co
 
 **Decisión**: Pesos **fijos** durante todo 2025; rebalanceo mensual marcado como `[EXTENDER]`
 
-Pesos fijos simplifican la comparación y son el comportamiento estándar descrito en el enunciado del taller. El rebalanceo mensual (~21 días de trading) está documentado en el código como extensión opcional sin implementación activa.
+Pesos fijos simplifican la comparación y son el comportamiento estándar descrito en el enunciado. El rebalanceo mensual (~21 días de trading) está documentado en el código como extensión opcional.
 
 ---
 
@@ -136,9 +146,7 @@ Pesos fijos simplifican la comparación y son el comportamiento estándar descri
 pesos_nn = y_pred / np.sum(np.abs(y_pred))
 ```
 
-- Activos con predicción positiva → posición larga (peso > 0)
-- Activos con predicción negativa → posición corta (peso < 0)
-- Normalización: presupuesto completo invertido (suma de |pesos| = 1)
+En la práctica, dado el colapso al predictor de la media positiva, todos los activos tienen predicción positiva y la cartera es long-only.
 
 ---
 
@@ -146,16 +154,24 @@ pesos_nn = y_pred / np.sum(np.abs(y_pred))
 
 **Decisión**: Solo log-retornos; sin normalización adicional en notebooks 01–05
 
-El material teórico advierte contra normalizar con estadísticas del dataset completo. Los log-retornos ya tienen media ≈ 0 y están en la misma escala para todos los activos. La normalización avanzada se reserva para `07_investigacion.ipynb`.
+Los log-retornos ya tienen media ≈ 0 y están en la misma escala para todos los activos. La normalización avanzada se reserva para `07_investigacion.ipynb`.
 
 ---
 
 ## D16 — Preprocesado en la investigación
 
-**Decisión**: `StandardScaler` (fit solo en train) como técnica activa; FFD como `[EXTENDER]`
+**Decisión**: Implementar y comparar 5 técnicas; FFD(d=0.2) es la única con mejora real
 
-- **StandardScaler**: técnica estándar, fácil de implementar correctamente sin leakage, impacto medible en MAE.
-- **FFD**: técnica avanzada (diferenciación fraccional), requiere implementación propia de `ffd_weights()` y `apply_ffd()`. Incluida como código comentado listo para activarse.
+Técnicas implementadas en `07_investigacion.ipynb` (todas sobre V_in=30):
+
+| Técnica | Δ MAE (V_out=1) | Activa |
+|---------|----------------|--------|
+| StandardScaler | +4.1% | Sí |
+| Rolling Z-score | +2.4% | Sí |
+| FFD (d=0.2) | −8.9% | Sí |
+| Feature Engineering (vol, momentum) | +1.6% | Sí |
+
+FFD es la única mejora confirmada, y solo para V_out=1 día. Para V_out≥5 empeora (añade ruido de largo plazo donde el modelo necesita estacionariedad).
 
 ---
 
@@ -163,7 +179,7 @@ El material teórico advierte contra normalizar con estadísticas del dataset co
 
 **Decisión**: `matplotlib` para curvas de convergencia; `seaborn` para heatmaps 4×4
 
-`seaborn.heatmap` genera los heatmaps de MAE en una línea con anotaciones automáticas. `matplotlib` es suficiente para curvas de pérdida y barplots. No se introducen dependencias adicionales de visualización.
+`seaborn.heatmap` genera los heatmaps de MAE en una línea con anotaciones automáticas. No se introducen dependencias adicionales.
 
 ---
 
@@ -171,7 +187,7 @@ El material teórico advierte contra normalizar con estadísticas del dataset co
 
 **Decisión**: Pegar los dicts `results` manualmente; no hay ejecución automática entre notebooks
 
-Cada notebook es autocontenido (descarga datos, entrena, evalúa). No existe un sistema de persistencia automática entre notebooks para mantener el código simple y compatible con Colab. El usuario copia los dicts o re-ejecuta los notebooks antes de `06_resultados.ipynb`.
+Cada notebook es autocontenido (descarga datos, entrena, evalúa). No existe persistencia automática entre notebooks para mantener el código simple y compatible con Colab. Los valores se copian de los outputs de ejecución.
 
 ---
 
@@ -179,7 +195,7 @@ Cada notebook es autocontenido (descarga datos, entrena, evalúa). No existe un 
 
 **Decisión**: 23 activos fijos (los que tienen datos completos desde 1945)
 
-`precios.dropna(axis=1, inplace=True)` elimina automáticamente activos sin datos históricos completos. En la práctica, los 23 activos de `TICKERS` siempre tienen datos desde 1945, por lo que el número es estable.
+`precios.dropna(axis=1, inplace=True)` elimina automáticamente activos sin datos históricos completos.
 
 ---
 
@@ -195,7 +211,7 @@ El enunciado especifica comparar rendimientos para 2025. Descargar sin fecha de 
 
 **Decisión**: Retorno total, retorno anual, volatilidad anual, Sharpe, Sortino, Max Drawdown
 
-Conjunto estándar de métricas de gestión de carteras. Se usan `TRADING_DAYS = 252` para anualización. El Sortino usa solo los retornos negativos en el denominador, siendo más informativo que el Sharpe en distribuciones asimétricas (como los retornos financieros).
+`TRADING_DAYS = 252` para anualización. El Sortino usa solo retornos negativos en el denominador, siendo más informativo que el Sharpe en distribuciones asimétricas.
 
 ---
 
@@ -203,7 +219,7 @@ Conjunto estándar de métricas de gestión de carteras. Se usan `TRADING_DAYS =
 
 **Decisión**: `src/utils.py` compartido + 9 notebooks independientes
 
-Centralizar funciones en `utils.py` evita duplicación de código y hace que cambiar un hiperparámetro global (e.g., `INPUT_WINDOWS`) afecte automáticamente a todos los notebooks. Cada notebook sigue siendo autocontenido para facilitar la ejecución independiente en Colab.
+Centralizar funciones en `utils.py` evita duplicación. Cada notebook sigue siendo autocontenido para facilitar la ejecución independiente en Colab.
 
 ---
 
@@ -211,7 +227,7 @@ Centralizar funciones en `utils.py` evita duplicación de código y hace que cam
 
 **Decisión**: Usar `# [EXTENDER]` para código comentado ampliable
 
-Permite al equipo ir más allá de 64 modelos sin cambiar la estructura. Cada línea comentada es una arquitectura completa lista para activarse con un solo comentario eliminado. El bucle de entrenamiento no cambia.
+Permite ir más allá de 256 modelos sin cambiar la estructura. Cada línea comentada es una extensión lista para activarse.
 
 ---
 
@@ -219,7 +235,7 @@ Permite al equipo ir más allá de 64 modelos sin cambiar la estructura. Cada l�
 
 **Decisión**: Flag booleano al inicio de cada notebook, `EPOCHS = 50` cuando activo
 
-Permite probar que todo el flujo funciona en ~1-2 horas antes del entrenamiento completo (~8-12 horas con 300 épocas). Se activa localmente sin cambiar ningún otro parámetro.
+Permite probar que todo el flujo funciona sin esperar las 3–4 horas de cada entrenamiento completo.
 
 ---
 
@@ -227,19 +243,12 @@ Permite probar que todo el flujo funciona en ~1-2 horas antes del entrenamiento 
 
 **Decisión**: `Adam(learning_rate=1e-4)` en `build_mlp` del notebook 02 (solo MLP)
 
-El LR global de `utils.py` (`compile_model` default = 3e-4) no se modifica para no
-afectar a LSTM, GRU y Conv, que no han sido diagnosticados todavía.
+El LR global de `utils.py` (`compile_model` default = 3e-4) no se modifica para no afectar a LSTM, GRU y Conv.
 
 **Evidencia (Evidencia 3, 300 épocas, 16 combinaciones):**
 - Baseline LR=3e-4: best epoch 3–28 en 15/16 combinaciones (convergencia demasiado rápida)
 - Variante LR=1e-4: best epoch 8–300 — 14/16 celdas mejoran best_epoch
 - Δval_min máximo: +0.00009 (umbral de rechazo: 0.0005) → sin coste en calidad
-- Casos marginales: (10,90) ruido estadístico; (90,30) Δval=+0.00008, best_ep−1
-
-**Efecto por grupo:**
-- V_in=5,10 (dropout=0.0): best_ep pasa de ~10 a ~290 — aprendizaje distribuido en más épocas
-- V_in=30,90 (dropout=0.1–0.2): mejora modesta (best_ep sube ~2–22 épocas)
-  porque el dropout ya actúa como regularizador y limita el efecto del LR
 
 ---
 
@@ -247,12 +256,39 @@ afectar a LSTM, GRU y Conv, que no han sido diagnosticados todavía.
 
 **Decisión**: `kernel_regularizer=l2(1e-4)` en la capa Dense(64) de `build_mlp`
 
-Diagnóstico Paso 2: variante L2=1e-4 a 150 épocas vs referencia D25 (LR=1e-4, sin L2, 300 épocas).
+val_min mejora en 15/16 combinaciones; único caso con Δval > 0: (90,1) con +0.00004 (< umbral 0.0005).
 
-**Resultados:**
-- val_min mejora en 15/16 combinaciones; único caso con Δval > 0: (90,1) con +0.00004 (< umbral 0.0005)
-- best_epoch mejora en 10/11 casos comparables (ref_ep ≤ 150); único empate: (30,90) con ref_ep=var_ep=34
-- V_in=30,90 (objetivo): best_ep prácticamente se dobla (8→18 en (90,1), 11→23 en (90,5), etc.); mayor ganancia en (90,90): Δval=−0.00026
-- V_in=5,10 V_out alto (capped, ref_ep > 150): best_ep colapsa 287–300→31–43 porque LR=1e-4 + L2 se combinan para acelerar convergencia. Sin impacto en calidad (restore_best_weights captura el mínimo independientemente)
+---
 
-**Evidencia**: Paso 2 (celda cb6f19ae) + Evidencia 4 (celda d5f2c8e9) del notebook 02.
+## D27 — Regularización en modelos mixtos (05_mixtos, Sección B)
+
+**Decisión**: `dropout` en capas recurrentes + `SpatialDropout1D` en capas convolucionales; ajuste asimétrico por modelo
+
+Las arquitecturas `conv_bilstm` (22K params) y `conv2_lstm` (37K params) tenían sobreajuste severo sin regularización. Se ajustó en 4 iteraciones:
+
+| Iteración | dropout LSTM | SpatialDropout1D | Resultado |
+|-----------|-------------|-----------------|-----------|
+| 1 — Sin regularización | — | — | Divergencia severa |
+| 2 — Dropout LSTM | 0.1 | — | `conv_bilstm` OK, `conv2_lstm` parcial |
+| 3 — Dropout + SpatialDrop | 0.1 | 0.1 | Curvas convergen |
+| **4 — Ajuste fino (final)** | **0.15 / 0.1** | **0.15 / 0.12** | **Curvas limpias** |
+
+`SpatialDropout1D` es preferible al `Dropout` estándar para salidas convolucionales porque apaga canales completos (alta correlación interna) en lugar de neuronas individuales. El ajuste es asimétrico: `conv_bilstm` (una sola Conv1D) necesita más dropout que `conv2_lstm` (dos Conv1D apiladas cuyo efecto se compone).
+
+**Observación clave**: las 4 iteraciones produjeron exactamente el mismo MAE en test. La regularización mejora las curvas pero no el resultado — el techo es del problema (EMH), no del modelo.
+
+---
+
+## D28 — No intentar superar el techo del MAE con más arquitecturas
+
+**Decisión**: Priorizar diversidad de familias (6 recurrentes, 6 mixtos) sobre profundidad de ajuste de cada arquitectura
+
+Tras confirmar experimentalmente que todos los modelos convergen al mismo MAE (~0.0123 para V_out=1), el valor añadido de ajustar cada arquitectura individualmente es marginal. Se priorizó explorar más familias y dedicar tiempo a la investigación (notebook 07) donde FFD(d=0.2) sí produce una mejora real (−8.9%).
+
+---
+
+## D29 — Arquitecturas de 03_recurrentes: 6 modelos en lugar de los 2 mínimos
+
+**Decisión**: simple_rnn, gru, lstm, lstm_stack, bi_gru, lstm_drop — todos con unidades reducidas (32u base)
+
+Las unidades se redujeron de 64 a 32 para poder incluir 6 modelos en el mismo tiempo de cómputo. Con 32u el MAE es idéntico (colapso al predictor de la media), por lo que la capacidad adicional no aporta. `lstm_drop` (64u, dropout=0.2) es la excepción — tiene más parámetros para que el dropout tenga efecto regularizador visible.
