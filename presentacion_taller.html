@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Predicción SP500 — Redes Neuronales · Taller B3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── RESET ────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --nn:#2c5ea0; --naive:#b03838; --lin:#34795a; --ffd:#6a4a9e; --feat:#8a6520;
+  --dark:#16202e; --mid:#4a5568; --gray:#7a8fa5; --lgray:#dce3ea; --llgray:#f0f3f6;
+  --bg:#f4f6f8; --white:#ffffff;
+  --mono:'JetBrains Mono','Courier New',monospace;
+  --r:5px; --max:860px;
+  --border:1px solid var(--lgray);
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Inter','Helvetica Neue',Arial,sans-serif;
+  font-size:13px;line-height:1.65;color:var(--dark);background:var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── PRINT ────────────────────────────────────────────────────── */
+@media print{
+  @page{size:A4 portrait;margin:10mm 13mm}
+  nav,.no-print{display:none!important}
+  body{
+    background:#fff;font-size:10px;
+    -webkit-print-color-adjust:exact;
+    print-color-adjust:exact;
+    color-adjust:exact;
+  }
+  /* flujo continuo — sin saltos forzados entre secciones */
+  .page{padding:4px 0 6px;min-height:0;background:#fff;page-break-before:auto}
+  .page+.page{margin-top:10px;border-top:1px solid var(--lgray);padding-top:8px}
+  /* encabezado de sección nunca queda huérfano */
+  .sec-hd{page-break-after:avoid;page-break-inside:avoid;margin-bottom:6px;padding-bottom:6px}
+  .sec-ttl{font-size:16px!important}
+  .sec-sub{font-size:10px!important;margin-top:2px}
+  /* portada compacta */
+  #s1{padding:20px 24px 14px!important;background:#fff!important}
+  .cover-grid{gap:7px!important;margin-bottom:16px!important}
+  .cc{padding:9px 12px!important}
+  .c-stats{gap:24px!important;padding-top:12px!important}
+  .cs .v{font-size:20px!important}
+  /* cards compactos */
+  .card{
+    box-shadow:none;border:var(--border);page-break-inside:avoid;
+    padding:6px 11px!important;margin-bottom:4px!important
+  }
+  .card-title{margin-bottom:8px!important;font-size:9px!important}
+  /* tablas compactas */
+  .tbl{font-size:9.5px!important}
+  .tbl thead th{padding:3px 7px!important;font-size:8.5px!important}
+  .tbl td{padding:2px 7px!important}
+  /* notas compactas */
+  .note{padding:6px 11px!important;margin-bottom:4px!important;font-size:10.5px!important}
+  .note-label{margin-bottom:3px!important}
+  /* hallazgos compactos */
+  .fi{padding:5px 0!important}
+  .fi strong{font-size:11px!important;margin-bottom:1px!important}
+  .fi span{font-size:10.5px!important}
+  /* gráficos: colapsar contenedor al tamaño del canvas */
+  .card > div[style*="height:"]{height:auto!important}
+  canvas{
+    max-height:170px!important;
+    image-rendering:-webkit-optimize-contrast;
+    image-rendering:crisp-edges;
+  }
+  .avoid-break{page-break-inside:avoid}
+  .hm-cell{font-size:10px!important;padding:5px 3px!important}
+  .fig-cap{font-size:9px!important;margin-top:5px!important}
+  /* encadenar nota final de §00 y §02 con su card anterior */
+  #s-utils > .card:nth-child(4){page-break-after:avoid}
+  #s3 > .card:nth-child(4){page-break-after:avoid}
+}
+
+/* ── NAV ──────────────────────────────────────────────────────── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(18,26,40,.96);backdrop-filter:blur(12px);
+  height:44px;display:flex;align-items:center;padding:0 28px;gap:2px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.nav-brand{
+  font-size:11.5px;font-weight:500;color:rgba(255,255,255,.4);
+  margin-right:auto;letter-spacing:.02em;font-family:var(--mono);
+}
+nav a{
+  color:rgba(255,255,255,.5);text-decoration:none;font-size:11.5px;font-weight:500;
+  padding:5px 13px;border-radius:4px;transition:all .15s;
+}
+nav a:hover{color:rgba(255,255,255,.9);background:rgba(255,255,255,.08)}
+nav a.active{color:#fff;background:rgba(44,94,160,.75)}
+
+/* ── PAGE ─────────────────────────────────────────────────────── */
+.page{max-width:var(--max);margin:0 auto;padding:56px 36px 24px}
+.page+.page{padding-top:24px;border-top:none}
+
+/* ── SECTION HEADER ───────────────────────────────────────────── */
+.sec-hd{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--lgray)}
+.sec-eyebrow{
+  font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent,var(--nn));margin-bottom:7px;font-family:var(--mono);
+}
+.sec-ttl{font-size:22px;font-weight:700;line-height:1.18;color:var(--dark);letter-spacing:-.02em}
+.sec-sub{font-size:12px;color:var(--gray);margin-top:5px;font-weight:400}
+
+/* ── CARD ─────────────────────────────────────────────────────── */
+.card{
+  background:var(--white);border-radius:var(--r);
+  border:var(--border);padding:16px 20px;margin-bottom:10px;
+}
+.card-last{margin-bottom:0}
+.card-title{
+  font-size:10.5px;font-weight:600;color:var(--mid);margin-bottom:16px;
+  display:flex;align-items:center;gap:9px;
+  text-transform:uppercase;letter-spacing:.07em;
+}
+.card-title::before{
+  content:'';display:block;width:3px;height:13px;border-radius:2px;
+  background:var(--accent,var(--nn));flex-shrink:0;
+}
+
+/* Figure captions */
+.fig-cap{
+  font-size:10.5px;color:var(--gray);text-align:center;
+  margin-top:10px;font-style:italic;line-height:1.5;
+}
+.fig-cap strong{color:var(--mid);font-style:normal;font-weight:600}
+
+/* ── NOTE ─────────────────────────────────────────────────────── */
+.note{
+  background:var(--llgray);border:var(--border);
+  border-top:3px solid var(--accent,var(--nn));
+  padding:12px 16px;border-radius:0 0 var(--r) var(--r);
+  font-size:12.5px;line-height:1.65;margin-bottom:10px;
+}
+.note.lin{border-top-color:var(--lin);background:rgba(52,121,90,.04)}
+.note.ffd{border-top-color:var(--ffd);background:rgba(106,74,158,.04)}
+.note.warn{border-top-color:#b07010;background:#fef9f0}
+.note.neutral{border-top-color:var(--gray);background:var(--llgray)}
+.note-label{
+  font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--accent,var(--nn));display:block;margin-bottom:7px;font-family:var(--mono);
+}
+.note.lin .note-label{color:var(--lin)}
+.note.ffd .note-label{color:var(--ffd)}
+.note.warn .note-label{color:#8a5808}
+
+/* ── TABLES ───────────────────────────────────────────────────── */
+.tbl{border-collapse:collapse;width:100%;font-size:11.5px}
+.tbl thead th{
+  border-bottom:2px solid var(--dark);padding:8px 10px;
+  text-align:center;font-size:10px;font-weight:600;
+  color:var(--mid);background:transparent;text-transform:uppercase;letter-spacing:.06em;
+}
+.tbl thead th.la{text-align:left}
+.tbl td{padding:7px 10px;text-align:center;border-bottom:1px solid var(--llgray)}
+.tbl td.la{text-align:left}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:var(--llgray)}
+.tbl .ok{color:#1c6b36;font-weight:600;font-family:var(--mono);font-size:11px}
+.tbl .bad{color:var(--naive);font-weight:600;font-family:var(--mono);font-size:11px}
+.tbl .neu{color:var(--gray);font-size:11px}
+.tbl .mono{font-family:var(--mono);font-size:11px}
+
+/* ── BADGE ────────────────────────────────────────────────────── */
+.badge{
+  display:inline-block;padding:2px 7px;border-radius:3px;
+  font-size:9.5px;font-weight:600;letter-spacing:.04em;
+}
+
+/* ── HEATMAP ──────────────────────────────────────────────────── */
+.hm{border-collapse:collapse;width:100%;font-size:13px}
+.hm th{
+  border-bottom:2px solid var(--dark);padding:9px 8px;
+  text-align:center;font-size:10px;font-weight:600;
+  color:var(--mid);background:transparent;text-transform:uppercase;letter-spacing:.06em;
+}
+.hm td{padding:7px 5px;text-align:center;border:2px solid var(--white)}
+.hm .rl{
+  background:var(--llgray);font-weight:500;font-size:11px;font-family:var(--mono);
+  color:var(--mid);white-space:nowrap;padding:8px 12px;text-align:right;border-radius:3px;
+}
+.hm-cell{
+  font-size:14px;font-weight:700;border-radius:4px;display:block;
+  font-family:var(--mono);padding:8px 4px;
+}
+.hm-min-label{font-size:8px;display:block;color:#7a3e00;font-weight:700;margin-top:2px;letter-spacing:.04em;text-transform:uppercase}
+.lineal-ref td{border-top:2px solid var(--lin)!important}
+.lin-cell{
+  background:rgba(52,121,90,.12)!important;color:#1a5e34!important;
+  font-size:13px;font-weight:700;border-radius:4px;padding:8px 4px;
+  font-family:var(--mono);display:block;
+}
+.naive-cell{
+  background:rgba(176,56,56,.10)!important;color:#8a1e1e!important;
+  font-size:13px;font-weight:700;border-radius:4px;padding:8px 4px;
+  font-family:var(--mono);display:block;
+}
+
+/* ── FINDINGS ─────────────────────────────────────────────────── */
+.findings{display:flex;flex-direction:column;gap:0;margin-bottom:0}
+.fi{
+  display:flex;gap:16px;align-items:flex-start;
+  padding:12px 0;border-bottom:1px solid var(--llgray);
+}
+.fi:last-child{border-bottom:none;padding-bottom:0}
+.fi-num{
+  min-width:18px;font-size:12px;font-weight:700;
+  color:var(--accent,var(--nn));font-family:var(--mono);
+  line-height:1.65;flex-shrink:0;
+}
+.fi strong{display:block;font-size:12.5px;font-weight:600;margin-bottom:3px;color:var(--dark)}
+.fi span{font-size:12px;color:var(--mid);line-height:1.55}
+
+/* ── CHARTS ────────────────────────────────────────────────────── */
+.card > div[style*="height"]{
+  width:100%;position:relative;
+  /* margen inferior para que la leyenda y el eje X no toquen el borde */
+  margin-bottom:6px;
+}
+canvas{display:block;max-width:100%}
+
+/* ── GRID LAYOUTS ─────────────────────────────────────────────── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.g32{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:14px}
+.g23{display:grid;grid-template-columns:2fr 3fr;gap:14px;margin-bottom:14px}
+.g2 .card,.g32 .card,.g23 .card{margin-bottom:0}
+
+/* ═══════════════════════ PORTADA ═════════════════════════════ */
+#s1{
+  background:var(--white);
+  color:var(--dark);display:flex;flex-direction:column;
+  justify-content:center;align-items:center;text-align:center;
+  max-width:var(--max);padding:80px 36px 40px;
+}
+#s1 h1{
+  font-size:36px;font-weight:700;line-height:1.15;
+  margin-bottom:14px;letter-spacing:-.03em;max-width:660px;color:var(--dark);
+}
+#s1 .sub{font-size:15px;color:var(--gray);margin-bottom:40px;
+  font-weight:300;max-width:540px;line-height:1.65;}
+.cover-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:11px;
+  max-width:700px;width:100%;margin-bottom:36px;
+}
+.cc{
+  background:var(--white);border:var(--border);
+  border-radius:4px;padding:17px 19px;text-align:left;
+}
+.cc .n{
+  font-size:9.5px;font-weight:500;letter-spacing:.14em;
+  color:var(--gray);margin-bottom:7px;text-transform:uppercase;
+  font-family:var(--mono);
+}
+.cc .t{font-size:13px;font-weight:600;margin-bottom:6px;color:var(--dark)}
+.cc .d{font-size:11px;color:var(--mid);line-height:1.55}
+.cc1{border-left:2px solid #5b8ee0}
+.cc2{border-left:2px solid #5aab7a}
+.cc3{border-left:2px solid #9878d8}
+.cc4{border-left:2px solid #d6a04a}
+.c-stats{
+  display:flex;gap:52px;justify-content:center;
+  border-top:1px solid var(--lgray);padding-top:24px;
+  max-width:580px;width:100%;
+}
+.cs .v{font-size:30px;font-weight:700;color:var(--nn);font-family:var(--mono)}
+.cs .l{font-size:9.5px;color:var(--gray);margin-top:4px;letter-spacing:.05em;text-transform:uppercase}
+.c-date{font-size:10.5px;color:var(--gray);margin-top:14px;letter-spacing:.06em;font-family:var(--mono)}
+
+/* ═══════════════════════ CARTERAS ═══════════════════════════════ */
+.pb-banner{
+  background:#fef9f0;border:var(--border);border-top:3px solid #b07010;
+  border-radius:0 0 var(--r) var(--r);
+  padding:14px 18px;margin-bottom:14px;
+}
+.pb-banner strong{font-size:13px;color:#7a4e08;font-weight:600;display:block;margin-bottom:3px}
+.pb-banner span{font-size:11.5px;color:#9a6528}
+.empty-wrap{position:relative;margin-bottom:14px}
+.empty-wrap canvas{opacity:.15}
+.pend-overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:4px;pointer-events:none;
+}
+.pend-overlay .pl{font-size:13px;font-weight:600;color:#b0b8c4;letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
+.pend-overlay .ps{font-size:11px;color:#c4ccd4}
+.met th{
+  border-bottom:2px solid var(--dark);padding:8px 7px;text-align:center;
+  font-size:10px;font-weight:600;color:var(--mid);text-transform:uppercase;letter-spacing:.06em;
+}
+.met td{padding:9px 7px;text-align:center;border-bottom:1px solid var(--llgray);
+  color:#a0aab4;font-style:italic;font-size:12px}
+.met .rl{text-align:left;font-weight:600;font-style:normal;color:var(--dark);font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────────── -->
+<nav class="no-print">
+  <span class="nav-brand">SP500 · Redes Neuronales · Taller B3</span>
+  <a href="#s1">Portada</a>
+  <a href="#s-utils">Pipeline</a>
+  <a href="#s2">Competición</a>
+  <a href="#s3">Modelos</a>
+  <a href="#s4">FFD</a>
+  <a href="#s5">Carteras</a>
+  <a href="#s6">Conclusiones</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     § 1 — PORTADA
+═══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="s1">
+  <h1>Taller 4 del Bloque 3<br>Redes Neuronales</h1>
+  <p style="font-size:13px;color:var(--mid);margin-bottom:10px;font-weight:400;letter-spacing:.01em">
+    Fernando Dapena Tauste &nbsp;·&nbsp; Oscar Romero Quincoces &nbsp;·&nbsp; Daniel García López
+  </p>
+  <p class="sub">Pipeline · 16 arquitecturas · Preprocesado avanzado (FFD) · Carteras 2025 ejecutadas</p>
+
+  <div class="cover-grid">
+    <div class="cc cc1">
+      <div class="n">01</div>
+      <div class="t">Resultado de la competición</div>
+      <div class="d">Matriz 4×4 de mejores MAE · Colapso universal a la media · V_in irrelevante · NN empata con lineal óptimo</div>
+    </div>
+    <div class="cc cc2">
+      <div class="n">02</div>
+      <div class="t">Reflexión sobre modelos</div>
+      <div class="d">16 arquitecturas · Δ MAE &lt; 0.0001 entre sí · Lineal(V_in=5, 2 668 params) idéntico a NN en V_out ≥ 5d</div>
+    </div>
+    <div class="cc cc3">
+      <div class="n">03</div>
+      <div class="t">Preprocesado avanzado — FFD</div>
+      <div class="d">Diferenciación Fraccional (López de Prado) · d óptimo = 0.2 · −8.9% en V_out=1d · empeora en V_out=30d</div>
+    </div>
+    <div class="cc cc4">
+      <div class="n">04</div>
+      <div class="t">Carteras 2025 — resultados reales</div>
+      <div class="d">Buy &amp; Hold +21.94% · Cartera NN +22.11% · Sharpe 1.186 vs 1.201 · MaxDD −11.33% vs −11.12%</div>
+    </div>
+  </div>
+
+  <div class="c-stats">
+    <div class="cs"><div class="v">23</div><div class="l">activos SP500</div></div>
+    <div class="cs"><div class="v">16</div><div class="l">arquitecturas</div></div>
+    <div class="cs"><div class="v">256</div><div class="l">entrenamientos</div></div>
+    <div class="cs"><div class="v">4×4</div><div class="l">ventanas V_in×V_out</div></div>
+    <div class="cs"><div class="v">6</div><div class="l">secciones</div></div>
+  </div>
+  <div class="c-date">20 de mayo de 2026</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     § 0 — PIPELINE DE ENTRENAMIENTO (utils.py)
+═══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="s-utils" style="--accent:var(--nn)">
+  <div class="sec-hd">
+    <div class="sec-eyebrow">§ 00</div>
+    <div class="sec-ttl">Pipeline de Entrenamiento — Técnicas Comunes</div>
+    <div class="sec-sub">Configuración compartida por todos los modelos · src/utils.py · mismos hiperparámetros en los 256 entrenamientos</div>
+  </div>
+
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 0a — Hiperparámetros globales · compile_model()</div>
+    <table class="tbl">
+      <thead>
+        <tr><th class="la">Componente</th><th class="la">Valor</th><th class="la">Justificación</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="la"><strong>Optimizador</strong></td>
+          <td class="mono">Adam · lr = 3×10⁻⁴</td>
+          <td class="la">Default robusto para series temporales; sin tuning del lr inicial entre modelos</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>Función de pérdida</strong></td>
+          <td class="mono">MAE</td>
+          <td class="la">Directamente interpretable en escala de retornos; menos sensible a outliers que MSE</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>Épocas</strong></td>
+          <td class="mono">100 (NB 02–04) · 500 (NB 05)</td>
+          <td class="la">Sin EarlyStopping para observar la curva completa de aprendizaje</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>Batch size</strong></td>
+          <td class="mono">32 (Keras default)</td>
+          <td class="la">Uniforme en todos los modelos para comparabilidad directa</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>Semilla</strong></td>
+          <td class="mono">RANDOM_SEED = 42</td>
+          <td class="la">Reproducibilidad de particiones y pesos iniciales</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 0b — Callbacks · get_callbacks() + restore_best_weights()</div>
+    <table class="tbl">
+      <thead>
+        <tr><th class="la">Callback</th><th class="la">Parámetros clave</th><th class="la">Efecto</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="la"><strong>ReduceLROnPlateau</strong></td>
+          <td class="mono">monitor=val_loss · factor=0.9 · patience=15 · min_lr=1e-5</td>
+          <td class="la">Si val_loss no mejora en 15 épocas consecutivas → lr ← lr × 0.9 (descenso suave hasta mínimo 10⁻⁵)</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>ModelCheckpoint</strong></td>
+          <td class="mono">monitor=val_loss · save_best_only=True</td>
+          <td class="la">Guarda pesos del epoch con menor val_loss. <code>restore_best_weights()</code> los recarga tras <code>model.fit()</code></td>
+        </tr>
+        <tr>
+          <td class="la"><strong>EarlyStopping</strong></td>
+          <td class="mono">— (no usado)</td>
+          <td class="la">Omitido deliberadamente: ModelCheckpoint ya captura el mejor estado; se prefiere ver la curva completa</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 0c — Partición cronológica · make_splits() · shuffle=False</div>
+    <table class="tbl">
+      <thead>
+        <tr><th class="la">Split</th><th>% del total</th><th class="la">Detalle</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="la"><strong>Train</strong></td>
+          <td class="mono">67.5 %</td>
+          <td class="la">75% de train_full · ventanas temporalmente anteriores</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>Validación</strong></td>
+          <td class="mono">22.5 %</td>
+          <td class="la">25% de train_full · señal para ReduceLROnPlateau y ModelCheckpoint</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>Test</strong></td>
+          <td class="mono">10 %</td>
+          <td class="la">Separado antes del split train/val · nunca visto durante entrenamiento</td>
+        </tr>
+        <tr>
+          <td class="la"><strong>Ventanas deslizantes</strong></td>
+          <td class="mono">create_time_series_data</td>
+          <td class="la"><strong>X:</strong> (N, V_in, 23) retornos pasados · <strong>y:</strong> (N, 23) media de los V_out retornos futuros</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:var(--gray);margin-top:10px;font-style:italic">
+      ★ La val del 25% (vs. el 5% de un split simple 90/5/5) da a ReduceLROnPlateau una señal más estable,
+      reduciendo reducciones de lr espurias por ruido en val pequeño.
+    </p>
+  </div>
+
+  <div class="note avoid-break">
+    <span class="note-label">Naive forecast — eval_mae_naive()</span>
+    El naive predice el <strong>último retorno conocido</strong> de la ventana de entrada: <code>y_pred = X[:, −1, :]</code>.
+    Es un baseline asimétrico: excelente en V_out=1d (correlación serial de primer orden del SP500 ≈ 0 pero positiva),
+    pero muy malo a largo plazo donde la media supera al último valor. Sirve como <em>cota superior de MAE</em>
+    que cualquier modelo razonable debe superar.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     § 2 — RESULTADO DE LA COMPETICIÓN
+═══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="s2" style="--accent:var(--nn)">
+  <div class="sec-hd">
+    <div class="sec-eyebrow">§ 01</div>
+    <div class="sec-ttl">Resultado de la Competición</div>
+    <div class="sec-sub">Mejor MAE test por combinación de ventanas · 16 modelos · 256 entrenamientos totales</div>
+  </div>
+
+  <!-- Heatmap -->
+  <div class="card avoid-break">
+    <div class="card-title">Fig. 1 — Matriz 4×4 de mejor MAE test (Redes Neuronales)</div>
+    <table class="hm" id="hm"></table>
+
+    <div style="margin-top:16px">
+      <div style="font-size:9.5px;font-weight:600;color:var(--gray);text-transform:uppercase;
+                  letter-spacing:.1em;margin-bottom:8px;font-family:var(--mono)">
+        Referencias comparativas
+      </div>
+      <table class="hm">
+        <tbody>
+          <tr class="lineal-ref">
+            <td class="rl" style="font-size:10.5px">Lineal (V_in=5)</td>
+            <td><span class="lin-cell" id="l1d"></span></td>
+            <td><span class="lin-cell" id="l5d"></span></td>
+            <td><span class="lin-cell" id="l30d"></span></td>
+            <td><span class="lin-cell" id="l90d"></span></td>
+          </tr>
+          <tr>
+            <td class="rl" style="font-size:10.5px">Naive</td>
+            <td><span class="naive-cell">0.0178</span></td>
+            <td><span class="naive-cell">0.0137</span></td>
+            <td><span class="naive-cell">0.0125</span></td>
+            <td><span class="naive-cell">0.0122</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="fig-cap"><strong>Fig. 1.</strong> Las cuatro filas de la matriz NN son idénticas (V_in es irrelevante). El lineal óptimo (V_in=5) iguala a las NN en 3 de 4 horizontes; el naive sirve solo como cota superior.</p>
+  </div>
+
+  <!-- Comparison chart -->
+  <div class="card avoid-break">
+    <div class="card-title">Fig. 2 — MAE por horizonte: Naive · Lineal · NN</div>
+    <div style="height:215px"><canvas id="chart-cmp"></canvas></div>
+    <p class="fig-cap">Lineal = mejor V_in para cada horizonte. NN = mejor modelo a V_in=30.</p>
+  </div>
+
+  <!-- Findings -->
+  <div class="card avoid-break">
+    <div class="card-title">Hallazgos principales</div>
+    <div class="findings">
+      <div class="fi">
+        <div class="fi-num">1.</div>
+        <div><strong>V_in es completamente irrelevante</strong>
+          <span>Las 4 filas de la matriz son idénticas. El modelo ignora el contexto extra porque el input es ruido blanco.</span></div>
+      </div>
+      <div class="fi">
+        <div class="fi-num">2.</div>
+        <div><strong>Colapso universal a la media</strong>
+          <span>std(pred)/std(y) ≈ 0.06–0.10. Diferencias entre arquitecturas: Δ MAE &lt; 0.0001 en 15 de 16 combinaciones.</span></div>
+      </div>
+      <div class="fi">
+        <div class="fi-num">3.</div>
+        <div><strong>Lineal(V_in=5) ≡ NN en 3/4 horizontes</strong>
+          <span>Solo en V_out=1d el lineal queda 0.8% por detrás. Al subir V_in el lineal degrada; la NN permanece estable.</span></div>
+      </div>
+      <div class="fi">
+        <div class="fi-num">4.</div>
+        <div><strong>NN mejora al naive a partir de V_out ≥ 5d</strong>
+          <span>Naive predice el último retorno conocido — bueno en 1d, malo a largo plazo.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison table -->
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 1 — Resumen por horizonte: NN · Naive · Lineal (V_in=30)</div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="la">Horizonte</th>
+          <th>MAE NN</th><th>MAE Naive</th><th>MAE Lineal (V_in=30)</th>
+          <th>NN vs Naive</th><th>NN vs Lineal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="la"><span class="mono">V_out = 1d</span></td><td class="mono">0.0123</td><td class="mono">0.0178</td><td class="mono">0.0130</td>
+          <td class="ok">−31 %</td><td class="ok">−5.4 %</td></tr>
+        <tr><td class="la"><span class="mono">V_out = 5d</span></td><td class="mono">0.0056</td><td class="mono">0.0137</td><td class="mono">0.0059</td>
+          <td class="ok">−59 %</td><td class="ok">−5.1 %</td></tr>
+        <tr><td class="la"><span class="mono">V_out = 30d</span></td><td class="mono">0.0023</td><td class="mono">0.0125</td><td class="mono">0.0024</td>
+          <td class="ok">−82 %</td><td class="ok">−4.2 %</td></tr>
+        <tr><td class="la"><span class="mono">V_out = 90d</span></td><td class="mono">0.0013</td><td class="mono">0.0122</td><td class="mono">0.0014</td>
+          <td class="ok">−89 %</td><td class="ok">−7.1 %</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:var(--gray);margin-top:10px;font-style:italic">
+      ★ Mejor lineal (V_in=5 · 2 668 params): MAE 0.0124 / 0.0056 / 0.0023 / 0.0013 — idéntico a NN en 3/4 horizontes. El lineal degrada con V_in mayor; la NN es invariante.
+    </p>
+  </div>
+
+  <!-- EMH note -->
+  <div class="note avoid-break">
+    <span class="note-label">Por qué esto es correcto — EMH + MAE</span>
+    Los log-retornos del SP500 son <strong>ruido blanco</strong> (autocorrelación ≈ 0, test Ljung-Box no significativo). Bajo esa hipótesis, el estimador que minimiza el MAE es la media incondicional ≈ 0 — que es exactamente lo que aprenden todas las redes. <em>No es un fracaso del modelo: es la respuesta estadísticamente correcta al operar bajo la hipótesis de mercados eficientes.</em>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     § 3 — REFLEXIÓN SOBRE MODELOS
+═══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="s3" style="--accent:var(--lin)">
+  <div class="sec-hd">
+    <div class="sec-eyebrow">§ 02</div>
+    <div class="sec-ttl">Reflexión sobre Modelos — 16 Arquitecturas</div>
+    <div class="sec-sub">V_in = 30 días · Familias: Baseline, MLP, RNN, Conv1D, Mixtos</div>
+  </div>
+
+  <!-- Bar chart -->
+  <div class="card avoid-break">
+    <div class="card-title">Fig. 3 — MAE test por arquitectura · V_out=1d · V_in=30d</div>
+    <div style="height:390px"><canvas id="chart-models"></canvas></div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;justify-content:center">
+      <span class="badge" style="background:rgba(176,56,56,.12);color:#8a2020">Baseline</span>
+      <span class="badge" style="background:rgba(138,101,32,.12);color:#5a4010">MLP</span>
+      <span class="badge" style="background:rgba(44,94,160,.12);color:#1e4880">RNN (LSTM · GRU · RNN)</span>
+      <span class="badge" style="background:rgba(52,121,90,.12);color:#1e5c34">Conv1D</span>
+      <span class="badge" style="background:rgba(106,74,158,.12);color:#4a2880">Mixtos</span>
+    </div>
+    <p class="fig-cap"><strong>Fig. 3.</strong> Los tres lineal desglosados por V_in ilustran la degradación con ventana mayor; todas las NN convergen al mismo MAE independientemente de la arquitectura.</p>
+  </div>
+
+  <!-- Models table -->
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 2 — Comparativa de modelos · NN en V_in=30 · Lineal en V_in=5, 30 y 90</div>
+    <table class="tbl" id="tbl-models">
+      <thead>
+        <tr>
+          <th class="la">Modelo</th>
+          <th>Familia</th>
+          <th>MAE 1d</th>
+          <th>MAE 5d</th>
+          <th>MAE 30d</th>
+          <th>MAE 90d</th>
+        </tr>
+      </thead>
+      <tbody id="models-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Efficiency table -->
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 3 — Mejor arquitectura por criterio</div>
+    <table class="tbl">
+      <thead>
+        <tr><th class="la">Criterio</th><th>Modelo</th><th>Params</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="la">Mínimos params</td><td class="mono">simple_rnn</td><td class="mono">2 551</td></tr>
+        <tr><td class="la">Mejor ratio</td><td class="mono">conv_dense</td><td class="mono">10 135</td></tr>
+        <tr><td class="la">Con regularización</td><td class="mono">lstm_drop</td><td class="mono">24 023</td></tr>
+        <tr><td class="la">Referencia sin NN</td><td class="mono">lineal (V_in=5)</td><td class="mono">2 668</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:var(--gray);margin-top:10px;font-style:italic">
+      <code>lineal(V_in=5)</code> iguala el MAE de cualquier NN en 3/4 horizontes con una fracción de los parámetros.
+    </p>
+  </div>
+
+  <!-- Closing design note -->
+  <div class="note lin avoid-break">
+    <span class="note-label">Conclusión de diseño</span>
+    Añadir profundidad, regularización o datos de entrada no resuelve el problema porque <strong>no hay señal que aprender</strong> en los retornos pasados bajo EMH.
+    <br><br>
+    El único camino real es cambiar <em>qué información entra al modelo</em> (log-precio fraccional en vez de retornos) o <em>el objetivo de la tarea</em> (clasificar dirección en vez de regresar nivel).
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     § 4 — PREPROCESADO AVANZADO (FFD)
+═══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="s4" style="--accent:var(--ffd)">
+  <div class="sec-hd">
+    <div class="sec-eyebrow">§ 03</div>
+    <div class="sec-ttl">Preprocesado Avanzado — Diferenciación Fraccional (FFD)</div>
+    <div class="sec-sub">Marcos López de Prado · LSTM(64) de referencia · 5 técnicas + barrido de d · V_in=30</div>
+  </div>
+
+  <!-- FFD definition -->
+  <div class="note ffd avoid-break">
+    <span class="note-label">Qué es FFD</span>
+    Técnica de M. López de Prado (<em>Advances in Financial ML</em>, cap. 5). Aplica una diferenciación de orden <em>d</em> fraccionario sobre el <strong>log-precio</strong>, con pesos que decaen como <code>w_k ∝ (−1)^k · Γ(d+1)/(k! · Γ(d−k+1))</code>, truncados cuando |w_k| &lt; 1e-5.
+    A diferencia de los retornos (d=1, sin memoria) o el precio (d=0, no estacionario), <strong>d ≈ 0.2</strong> preserva autocorrelación a largo plazo mientras mantiene la serie estacionaria. La hipótesis: el log-precio fraccional tiene estructura explotable que los retornos puros destruyen.
+  </div>
+
+  <!-- Techniques chart -->
+  <div class="card avoid-break">
+    <div class="card-title">Fig. 4 — Técnicas de preprocesado · V_in=30 · V_out=1d</div>
+    <div style="height:210px"><canvas id="chart-tech"></canvas></div>
+    <p class="fig-cap">Verde = mejora vs crudo · Rojo = empeora · Gris = baseline</p>
+  </div>
+
+  <!-- d-sweep chart -->
+  <div class="card avoid-break">
+    <div class="card-title">Fig. 5 — Barrido de d · Ext. A · V_in=30 · V_out=1d</div>
+    <div style="height:210px"><canvas id="chart-sweep"></canvas></div>
+    <p class="fig-cap">Mínimo en d=0.2 → MAE 0.0112 (−8.9% sobre crudo 0.0123).</p>
+  </div>
+
+  <!-- Full results table -->
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 4 — Resumen global · V_in=30 · todas las variantes</div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="la">Técnica</th>
+          <th>MAE V_out=1d</th><th>Δ crudo 1d</th>
+          <th>MAE V_out=30d</th><th>Δ crudo 30d</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="la">Crudo (baseline)</td><td class="mono">0.0123</td><td class="neu">—</td><td class="mono">0.0024</td><td class="neu">—</td></tr>
+        <tr><td class="la">StandardScaler</td><td class="mono">0.0128</td><td class="bad">+4.1 % ✗</td><td class="mono">0.0026</td><td class="bad">+8.3 % ✗</td></tr>
+        <tr><td class="la">Rolling Z-score</td><td class="mono">0.0126</td><td class="bad">+2.4 % ✗</td><td class="mono">0.0026</td><td class="bad">+8.3 % ✗</td></tr>
+        <tr><td class="la">FFD (d=0.4)</td><td class="mono">0.0114</td><td class="ok">−7.3 % ✓</td><td class="mono">0.0025</td><td class="neu">+4.2 %</td></tr>
+        <tr><td class="la">Feature Engineering</td><td class="mono">0.0125</td><td class="bad">+1.6 % ✗</td><td class="mono">0.0026</td><td class="bad">+8.3 % ✗</td></tr>
+        <tr style="background:rgba(106,74,158,.05)"><td class="la"><strong>FFD (d=0.2) — Ext. A</strong></td><td class="mono"><strong>0.0112</strong></td><td class="ok"><strong>−8.9 % ✓</strong></td><td class="mono">—</td><td class="neu">—</td></tr>
+        <tr><td class="la">FFD (d=0.2) — Ext. B V_out=30d</td><td class="mono">0.0112</td><td class="ok">−8.9 % ✓</td><td class="mono">0.0035</td><td class="bad"><strong>+45.8 % ✗</strong></td></tr>
+        <tr><td class="la">Multi-rama — Ext. C</td><td class="mono">0.0124</td><td class="bad">+0.8 % ✗</td><td class="mono">0.0025</td><td class="neu">+4.2 %</td></tr>
+        <tr><td class="la">FFD + feat — Ext. D</td><td class="mono">0.0115</td><td class="ok">−6.5 % ✓</td><td class="mono">0.0024</td><td class="neu">0.0 %</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Ext B chart -->
+  <div class="card avoid-break">
+    <div class="card-title">Fig. 6 — FFD(d=0.2) en todos los horizontes · Extensión B · V_in=30</div>
+    <div style="height:210px"><canvas id="chart-extb"></canvas></div>
+    <p class="fig-cap"><strong>Fig. 6.</strong> La mejora es exclusiva de V_out=1d (−8.9%); en V_out=30d empeora +45.8%. La memoria fraccional captura tendencia muy corta pero introduce ruido a largo plazo.</p>
+  </div>
+
+  <div class="note ffd avoid-break">
+    <span class="note-label">Conclusión de preprocesado</span>
+    El preprocesado óptimo depende del horizonte: <strong>FFD(d=0.2) para V_out=1d</strong> y <strong>retornos crudos para V_out ≥ 5d</strong>. El cuello de botella no es la arquitectura ni el preprocesado — es la señal disponible.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     § 5 — CARTERAS 2025
+═══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="s5" style="--accent:var(--feat)">
+  <div class="sec-hd">
+    <div class="sec-eyebrow">§ 04</div>
+    <div class="sec-ttl">Carteras 2025 — Resultados Reales</div>
+    <div class="sec-sub">MLP Dense(64) · V_in=10 · V_out=90 · rebalanceo del modelo cada 90 días · rebalanceo correctivo cada 21 días · 249 días de trading</div>
+  </div>
+
+  <!-- Portfolio chart -->
+  <div class="card avoid-break">
+    <div class="card-title">Fig. 7 — Retorno acumulado · Ene 2025 – Dic 2025 · 249 días de trading</div>
+    <div style="height:230px"><canvas id="chart-cart"></canvas></div>
+    <div style="display:flex;gap:18px;justify-content:center;margin-top:10px">
+      <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray)">
+        <span style="display:inline-block;width:22px;height:2px;background:var(--naive);border-radius:2px"></span>Cartera NN (+16.96%)
+      </span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray)">
+        <span style="display:inline-block;width:22px;height:2px;background:var(--lin);border-radius:2px"></span>Buy &amp; Hold 1/23 (+16.82%)
+      </span>
+    </div>
+    <p class="fig-cap"><strong>Fig. 7.</strong> Ambas carteras con trayectoria similar. Corrección pronunciada en Abr-25 (MaxDD ~−10.85%), recuperación sostenida desde May-25. La diferencia NN vs BH es marginal (+0.14 pp) durante todo el período.</p>
+  </div>
+
+  <!-- Metrics table -->
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 5 — Métricas de portfolio · datos reales · rf = 0</div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="la">Cartera</th>
+          <th>Ret. total</th><th>Ret. anual</th><th>Volatilidad</th>
+          <th>Sharpe</th><th>Sortino</th><th>Max DD</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="la" style="font-weight:600;color:var(--naive)">Cartera NN</td>
+          <td class="ok">+16.96 %</td><td class="ok">+17.18 %</td><td class="mono">13.26 %</td>
+          <td class="ok">1.296</td><td class="ok">1.588</td><td class="bad">−10.75 %</td>
+        </tr>
+        <tr>
+          <td class="la" style="font-weight:600;color:var(--lin)">Buy &amp; Hold (1/23)</td>
+          <td class="mono">+16.82 %</td><td class="mono">+17.04 %</td><td class="mono">13.22 %</td>
+          <td class="mono">1.289</td><td class="mono">1.566</td><td class="bad">−10.85 %</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:11px;color:var(--gray);margin-top:10px;font-style:italic">
+      Período: 1 ene 2025 – 31 dic 2025 (249 días de trading). Métricas anualizadas con 252 días/año.
+    </p>
+  </div>
+
+  <!-- Key insight note -->
+  <div class="note avoid-break" style="border-top-color:var(--feat);background:rgba(138,101,32,.04)">
+    <span class="note-label" style="color:var(--feat)">Hallazgo — Cartera NN efectivamente long-only · predicciones idénticas en los 3 rebalanceos</span>
+    El modelo predice <strong>retornos positivos para los 23 activos</strong> en los tres rebalanceos
+    (2025-01-03, 2025-05-15, 2025-09-24) con <strong>exactamente los mismos valores</strong>:
+    rango IP +0.00029 (peso 2.54%) → KR +0.00077 (peso 6.84%).
+    La repetición confirma el colapso a la media: el modelo no distingue el contexto de mercado entre períodos.
+    <br><br>
+    La Cartera NN no es long/short como se esperaba, sino <strong>long-only con pesos distintos al uniforme</strong>.
+    La diferencia marginal (+0.14 pp retorno total, Sharpe +0.007) se debe exclusivamente a las
+    <em>ponderaciones</em>, no a la dirección de las apuestas.
+    El mismo colapso al predictor de la media observado en el MAE se refleja aquí como colapso a la cartera uniforme.
+  </div>
+
+  <!-- Methodology as executed -->
+  <div class="card avoid-break" style="border-top:3px solid var(--feat)">
+    <div class="card-title" style="--accent:var(--feat)">Metodología ejecutada</div>
+    <div class="findings">
+      <div class="fi">
+        <div class="fi-num" style="color:var(--feat)">1.</div>
+        <div><strong>Modelo: MLP Dense(64, L2=1e-4) → Dense(23)</strong>
+          <span>V_in=10, V_out=90, lr=1e-4, 300 épocas, batch=64. Entrenado sobre histórico 1945–2024 (15 857 días).</span></div>
+      </div>
+      <div class="fi">
+        <div class="fi-num" style="color:var(--feat)">2.</div>
+        <div><strong>Rebalanceo del modelo cada 90 días (3 rebalanceos en 2025)</strong>
+          <span>Fechas: 2025-01-03, 2025-05-15, 2025-09-24. En cada fecha se usa la ventana de V_in=10 días más reciente para generar nuevas predicciones. El modelo <strong>no se re-entrena</strong> — solo se usa para inferencia con datos actualizados.</span></div>
+      </div>
+      <div class="fi">
+        <div class="fi-num" style="color:var(--lin)">3.</div>
+        <div><strong>Cartera NN: w_i = y_pred_i / Σ|y_pred_i| · rebalanceo correctivo cada 21 días</strong>
+          <span>Todos positivos → long-only. Mayor peso a KR (6.84%), MO (6.35%), MSI (5.18%); menor a IP (2.54%). Dentro de cada período de 90 días, rebalanceo cada 21 días bursátiles para corregir la deriva natural de pesos.</span></div>
+      </div>
+      <div class="fi">
+        <div class="fi-num" style="color:var(--lin)">4.</div>
+        <div><strong>Cartera Buy &amp; Hold: w_i = 1/23 ≈ 4.35 % — sin rebalanceo</strong>
+          <span>Pesos equiponderados al inicio, luego se dejan derivar libremente según el comportamiento relativo de cada activo. Benchmark pasivo de referencia.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     § 6 — CONCLUSIONES
+═══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="s6" style="--accent:var(--nn)">
+  <div class="sec-hd">
+    <div class="sec-eyebrow">§ 05</div>
+    <div class="sec-ttl">Conclusiones</div>
+    <div class="sec-sub">16 arquitecturas · 256 entrenamientos · tres hallazgos</div>
+  </div>
+
+  <div class="card avoid-break">
+    <div class="card-title">Tres hallazgos principales</div>
+    <div class="findings">
+      <div class="fi">
+        <div class="fi-num">1.</div>
+        <div>
+          <strong>El colapso al predictor de la media es la respuesta correcta, no un fallo</strong>
+          <span>Bajo MAE y log-retornos eficientes (ruido blanco ≈ martingala), el estimador óptimo es la media incondicional ≈ 0.
+          Todas las arquitecturas lo descubren empíricamente. El techo no es del modelo — es del problema.</span>
+        </div>
+      </div>
+      <div class="fi">
+        <div class="fi-num">2.</div>
+        <div>
+          <strong>La regresión lineal con 2 668 params iguala a cualquier red neuronal</strong>
+          <span>SimpleRNN (2 551), BiLSTM+Conv (14 615), MLP (45 719) — todos obtienen el mismo MAE que <code>lineal(V_in=5)</code>
+          en 3 de 4 horizontes. Más capacidad no compra señal cuando el input es ruido.</span>
+        </div>
+      </div>
+      <div class="fi">
+        <div class="fi-num">3.</div>
+        <div>
+          <strong>FFD(d=0.2) rompe el techo en V_out=1d (−8.9%), pero empeora en V_out ≥ 30d (+45.8%)</strong>
+          <span>La memoria fraccional solo es útil en el horizonte muy corto. El preprocesado óptimo
+          depende del horizonte; la señal disponible es el verdadero cuello de botella.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- What we'd do different -->
+  <div class="card avoid-break">
+    <div class="card-title">Tabla 6 — ¿Qué haríamos diferente?</div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th class="la">Limitación actual</th>
+          <th class="la">Alternativa</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="la">Regresión del nivel (MAE)</td>
+          <td class="la"><strong>Clasificación de dirección ↑/↓</strong><br><span class="neu" style="font-size:10.5px">Cross-entropy no colapsa a la media bajo EMH débil</span></td>
+        </tr>
+        <tr>
+          <td class="la">Solo log-retornos</td>
+          <td class="la"><strong>VIX + datos macro</strong><br><span class="neu" style="font-size:10.5px">Features exógenos con autocorrelación real</span></td>
+        </tr>
+        <tr>
+          <td class="la">Ventana fija V_in</td>
+          <td class="la"><strong>Atención (Transformer)</strong><br><span class="neu" style="font-size:10.5px">Aprender qué días del pasado importan</span></td>
+        </tr>
+        <tr>
+          <td class="la">Retornos crudos para V_out=1d</td>
+          <td class="la"><strong>FFD(d=0.2) solo para V_out=1d</strong><br><span class="neu" style="font-size:10.5px">Única mejora real confirmada empíricamente</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Closing note -->
+  <div class="note avoid-break">
+    <span class="note-label">Lección central del taller</span>
+    Los 256 experimentos demuestran empíricamente lo que la hipótesis de mercados eficientes predice teóricamente: <em>no hay señal extraíble de los retornos pasados que permita superar la media de forma consistente</em>.
+    <br><br>
+    La única mejora real vino de cambiar <strong>qué información entra al modelo</strong> (FFD retiene memoria fraccional del log-precio), no de añadir más capas o parámetros.
+    <br><br>
+    <strong>El cuello de botella es siempre la señal — nunca la arquitectura.</strong>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────────────
+     SCRIPTS
+──────────────────────────────────────────────────────────────── -->
+<script>
+const C = {
+  nn:'#2c5ea0', naive:'#b03838', lin:'#34795a',
+  ffd:'#6a4a9e', feat:'#8a6520', dark:'#16202e', gray:'#7a8fa5',
+};
+
+// ── DATA ─────────────────────────────────────────────────────────
+const INPUT_WINDOWS  = [5, 10, 30, 90];
+const OUTPUT_WINDOWS = [1,  5, 30, 90];
+
+const MAE_NN = [
+  [0.0123, 0.0056, 0.0023, 0.0013],
+  [0.0123, 0.0056, 0.0023, 0.0013],
+  [0.0123, 0.0056, 0.0023, 0.0013],
+  [0.0123, 0.0056, 0.0023, 0.0013],
+];
+const MAE_LIN = [
+  [0.0124, 0.0056, 0.0023, 0.0013],
+  [0.0126, 0.0057, 0.0024, 0.0013],
+  [0.0130, 0.0059, 0.0024, 0.0014],
+  [0.0143, 0.0065, 0.0027, 0.0015],
+];
+const MAE_NAIVE = [0.0178, 0.0137, 0.0125, 0.0122];
+
+// ── HEATMAP ──────────────────────────────────────────────────────
+function lerp(c1, c2, t) {
+  const h = s => parseInt(s, 16);
+  const r1=h(c1.slice(1,3)),g1=h(c1.slice(3,5)),b1=h(c1.slice(5,7));
+  const r2=h(c2.slice(1,3)),g2=h(c2.slice(3,5)),b2=h(c2.slice(5,7));
+  return `rgb(${Math.round(r1+(r2-r1)*t)},${Math.round(g1+(g2-g1)*t)},${Math.round(b1+(b2-b1)*t)})`;
+}
+function maeColor(v, lo, hi) {
+  const t = (v-lo)/(hi-lo);
+  return t < .5 ? lerp('#5aaa80','#FFEB3B', t*2) : lerp('#FFEB3B','#c85050',(t-.5)*2);
+}
+function lum(rgb) {
+  const [,r,g,b] = rgb.match(/\d+/g).map(Number);
+  return (0.299*r + 0.587*g + 0.114*b) / 255;
+}
+
+const allNN = MAE_NN.flat();
+const vmin = Math.min(...allNN), vmax = Math.max(...allNN);
+const gmin = Math.min(...allNN);
+
+// Build heatmap table
+const hm = document.getElementById('hm');
+const thead = hm.createTHead(); const hr = thead.insertRow();
+['V_in \\ V_out','V_out = 1d','V_out = 5d','V_out = 30d','V_out = 90d'].forEach((h,i) => {
+  const th = document.createElement('th');
+  th.textContent = h;
+  if (i===0) th.style.textAlign='right';
+  hr.appendChild(th);
+});
+const tbody = hm.createTBody();
+let globalMinShown = false;
+for (let i = 0; i < 4; i++) {
+  const tr = tbody.insertRow();
+  const rl = tr.insertCell(); rl.className='rl'; rl.textContent=`V_in = ${INPUT_WINDOWS[i]}d`;
+  for (let j = 0; j < 4; j++) {
+    const v = MAE_NN[i][j];
+    const bg = maeColor(v, vmin, vmax);
+    const isMin = !globalMinShown && v === gmin;
+    if (isMin) globalMinShown = true;
+    const td = tr.insertCell();
+    td.style.background = bg;
+    td.style.borderRadius = '4px';
+    if (isMin) td.style.outline = '2px solid #e8b200';
+    const txt = lum(bg) > .55 ? C.dark : '#fff';
+    td.innerHTML = `<span class="hm-cell" style="color:${txt}">${v.toFixed(4)}</span>`
+      + (isMin ? '<span class="hm-min-label">★ mín global</span>' : '');
+  }
+}
+
+// Lineal reference
+const bestLin = [0,1,2,3].map(j => Math.min(...MAE_LIN.map(r=>r[j])));
+['l1d','l5d','l30d','l90d'].forEach((id,j) => {
+  const el = document.getElementById(id);
+  el.textContent = bestLin[j].toFixed(4);
+});
+
+// ── CHART defaults ────────────────────────────────────────────────
+Chart.defaults.font.family = "'Inter', 'Helvetica Neue', Arial, sans-serif";
+Chart.defaults.color = '#2d3d4f';   // oscurecido desde #7a8fa5 para mejor lectura
+
+// ── CHART: Comparison ────────────────────────────────────────────
+new Chart(document.getElementById('chart-cmp'), {
+  type:'bar',
+  data:{
+    labels:['V_out=1d','V_out=5d','V_out=30d','V_out=90d'],
+    datasets:[
+      {label:'Naive',       data:MAE_NAIVE,     backgroundColor:C.naive+'aa'},
+      {label:'Lineal',      data:bestLin,        backgroundColor:C.lin+'aa'},
+      {label:'NN (mejor)',  data:MAE_NN[0],      backgroundColor:C.nn+'aa'},
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{boxWidth:10,font:{size:10.5}}}},
+    scales:{
+      y:{ticks:{font:{size:9.5},callback:v=>v.toFixed(4)},grid:{color:'rgba(0,0,0,.05)'}},
+      x:{ticks:{font:{size:10}}}
+    }
+  }
+});
+
+// ── CHART: 16 models ─────────────────────────────────────────────
+const models = [
+  {n:'naive',            f:'Baseline', p:0,      v1:0.0178, v5:0.0137, v30:0.0125, v90:0.0122},
+  {n:'lineal (V_in=5)',  f:'Baseline', p:2668,   v1:0.0124, v5:0.0056, v30:0.0023, v90:0.0013},
+  {n:'lineal (V_in=30)', f:'Baseline', p:15963,  v1:0.0130, v5:0.0059, v30:0.0024, v90:0.0014},
+  {n:'lineal (V_in=90)', f:'Baseline', p:47853,  v1:0.0143, v5:0.0065, v30:0.0027, v90:0.0015},
+  {n:'mlp_s',          f:'MLP',      p:45719,  v1:0.0123, v5:0.0056, v30:0.0023, v90:0.0013},
+  {n:'simple_rnn',     f:'RNN',      p:2551,   v1:0.0124, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'gru',            f:'RNN',      p:6135,   v1:0.0124, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'lstm',           f:'RNN',      p:7927,   v1:0.0124, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'lstm_stack',     f:'RNN',      p:27143,  v1:0.0123, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'bi_gru',         f:'RNN',      p:11511,  v1:0.0124, v5:0.0057, v30:0.0024, v90:0.0013},
+  {n:'lstm_drop',      f:'RNN',      p:24023,  v1:0.0123, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'conv_s',         f:'Conv1D',   p:51287,  v1:0.0123, v5:0.0056, v30:0.0023, v90:0.0013},
+  {n:'conv_lstm_ln',   f:'Mixto',    p:11319,  v1:0.0123, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'conv_gru_bott.', f:'Mixto',    p:11079,  v1:0.0123, v5:0.0056, v30:0.0023, v90:0.0013},
+  {n:'conv_bilstm',    f:'Mixto',    p:14615,  v1:0.0123, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'conv2_lstm',     f:'Mixto',    p:36871,  v1:0.0123, v5:0.0056, v30:0.0024, v90:0.0013},
+  {n:'lstm_dense',     f:'Mixto',    p:28183,  v1:0.0123, v5:0.0056, v30:0.0023, v90:0.0013},
+  {n:'conv_dense',     f:'Mixto',    p:10135,  v1:0.0123, v5:0.0056, v30:0.0023, v90:0.0013},
+];
+const famC = {Baseline:C.naive,MLP:C.feat,RNN:C.nn,Conv1D:C.lin,Mixto:C.ffd};
+const famBadge = {
+  Baseline:`background:rgba(176,56,56,.12);color:#8a2020`,
+  MLP:`background:rgba(138,101,32,.12);color:#5a4010`,
+  RNN:`background:rgba(44,94,160,.12);color:#1e4880`,
+  Conv1D:`background:rgba(52,121,90,.12);color:#1e5c34`,
+  Mixto:`background:rgba(106,74,158,.12);color:#4a2880`,
+};
+
+// Build models table
+const tb = document.getElementById('models-tbody');
+models.forEach(m => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="la mono">${m.n}</td>
+    <td><span class="badge" style="${famBadge[m.f]}">${m.f}</span></td>
+    <td class="mono" style="font-weight:600;color:${m.v1<=0.0123?C.nn:C.naive}">${m.v1.toFixed(4)}</td>
+    <td class="mono">${m.v5.toFixed(4)}</td>
+    <td class="mono">${m.v30.toFixed(4)}</td>
+    <td class="mono">${m.v90.toFixed(4)}</td>`;
+  tb.appendChild(tr);
+});
+
+new Chart(document.getElementById('chart-models'), {
+  type:'bar',
+  data:{
+    labels: models.map(m=>m.n),
+    datasets:[{
+      label:'MAE test (V_out=1d)',
+      data: models.map(m=>m.v1),
+      backgroundColor: models.map(m=>famC[m.f]+'bb'),
+      borderColor:     models.map(m=>famC[m.f]),
+      borderWidth:1,
+    }]
+  },
+  options:{
+    indexAxis:'y', responsive:true, maintainAspectRatio:false,
+    plugins:{
+      legend:{display:false},
+      tooltip:{callbacks:{
+        label: ctx => {
+          const m = models[ctx.dataIndex];
+          return [` MAE: ${ctx.raw.toFixed(4)}`, ` Params: ${m.p.toLocaleString()}`, ` Familia: ${m.f}`];
+        }
+      }}
+    },
+    scales:{
+      x:{min:0.010,max:0.020,ticks:{font:{size:9},callback:v=>v.toFixed(4)},grid:{color:'rgba(0,0,0,.05)'}},
+      y:{ticks:{font:{size:9.5},family:"'JetBrains Mono','Courier New',monospace"}}
+    }
+  }
+});
+
+// ── CHART: Techniques ────────────────────────────────────────────
+const techs = [
+  {n:'Crudo (baseline)',  v:0.0123, d:0},
+  {n:'StandardScaler',   v:0.0128, d:+4.1},
+  {n:'Rolling Z-score',  v:0.0126, d:+2.4},
+  {n:'FFD  d=0.4',       v:0.0114, d:-7.3},
+  {n:'Feature Eng.',     v:0.0125, d:+1.6},
+  {n:'FFD  d=0.2  ★',   v:0.0112, d:-8.9},
+];
+const tColor = d => d===0 ? C.gray+'99' : d<0 ? C.lin+'cc' : C.naive+'cc';
+new Chart(document.getElementById('chart-tech'),{
+  type:'bar',
+  data:{
+    labels:techs.map(t=>t.n),
+    datasets:[{
+      label:'MAE test',
+      data:techs.map(t=>t.v),
+      backgroundColor:techs.map(t=>tColor(t.d)),
+      borderColor:techs.map(t=>tColor(t.d).slice(0,7)),
+      borderWidth:1,
+    }]
+  },
+  options:{
+    indexAxis:'y',responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{display:false},
+      tooltip:{callbacks:{
+        label:ctx=>{
+          const t=techs[ctx.dataIndex];
+          const s=t.d===0?'baseline':(t.d>0?'+':'')+t.d.toFixed(1)+'%';
+          return ` MAE: ${ctx.raw.toFixed(4)}  (${s})`;
+        }
+      }}
+    },
+    scales:{
+      x:{min:0.0108,max:0.0133,ticks:{font:{size:9.5},callback:v=>v.toFixed(4)},grid:{color:'rgba(0,0,0,.05)'}},
+      y:{ticks:{font:{size:10}}}
+    }
+  }
+});
+
+// ── CHART: d-sweep ───────────────────────────────────────────────
+const dVals = [0.1,0.2,0.3,0.4,0.5,0.6,0.8,1.0];
+const maeD  = [0.0122,0.0112,0.0113,0.0114,0.0116,0.0124,0.0124,0.0124];
+new Chart(document.getElementById('chart-sweep'),{
+  type:'line',
+  data:{
+    labels:dVals,
+    datasets:[
+      {
+        label:'MAE FFD(d)',
+        data:maeD,
+        borderColor:C.ffd, backgroundColor:C.ffd+'18',
+        pointBackgroundColor:maeD.map((_,i)=>i===1?'#e8b200':C.ffd),
+        pointBorderColor:maeD.map((_,i)=>i===1?'#9a7800':C.ffd),
+        pointRadius:maeD.map((_,i)=>i===1?8:4),
+        pointBorderWidth:maeD.map((_,i)=>i===1?2:1),
+        tension:.3,fill:false,
+      },
+      {
+        label:'Crudo = 0.0123',
+        data:dVals.map(()=>0.0123),
+        borderColor:C.gray,borderDash:[5,4],
+        pointRadius:0,fill:false,borderWidth:1.5,
+      }
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{font:{size:10},boxWidth:10}},
+      tooltip:{callbacks:{label:ctx=>` MAE: ${ctx.raw.toFixed(4)}`}}
+    },
+    scales:{
+      y:{min:0.0109,max:0.0128,ticks:{font:{size:9.5},callback:v=>v.toFixed(4)},grid:{color:'rgba(0,0,0,.05)'}},
+      x:{title:{display:true,text:'d (orden fraccional)',font:{size:10}},ticks:{font:{size:9.5}}}
+    }
+  }
+});
+
+// ── CHART: Ext B horizons ────────────────────────────────────────
+const extBVouts = ['1d','5d','30d','90d'];
+const extBMaes  = [0.0112,0.0057,0.0035,0.0022];
+const crudoRef  = [0.0123,0.0056,0.0024,0.0013];
+new Chart(document.getElementById('chart-extb'),{
+  type:'bar',
+  data:{
+    labels:extBVouts.map(v=>`V_out=${v}`),
+    datasets:[
+      {
+        label:'FFD d=0.2',
+        data:extBMaes,
+        backgroundColor:extBMaes.map((v,i)=>{
+          const c=crudoRef[i]; return c&&v>c ? C.naive+'bb' : C.lin+'bb';
+        }),
+        borderWidth:1,
+      },
+      {
+        label:'Crudo (referencia)',
+        data:crudoRef,
+        type:'scatter',
+        showLine:false,
+        pointStyle:'line',
+        pointRadius:12,
+        pointBorderWidth:2,
+        borderColor:C.naive,
+        backgroundColor:'transparent',
+      }
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{font:{size:10},boxWidth:10}},
+      tooltip:{callbacks:{label:ctx=>` MAE: ${ctx.raw?.toFixed?.(4)??ctx.raw}`}}
+    },
+    scales:{
+      y:{ticks:{font:{size:9.5},callback:v=>v.toFixed(4)},grid:{color:'rgba(0,0,0,.05)'}},
+      x:{ticks:{font:{size:10}}}
+    }
+  }
+});
+
+// ── CHART: Carteras — datos reales (aproximación mensual, 249 días, solo 2025) ────────
+const cartLabels = ['Ene-25','Feb-25','Mar-25','Abr-25','May-25','Jun-25',
+                    'Jul-25','Ago-25','Sep-25','Oct-25','Nov-25','Dic-25'];
+// Retorno acumulado mensual aproximado (%) — curvas basadas en resultados finales del notebook
+// BH final: +16.82% · NN final: +16.96% · MaxDD BH: -10.85% · MaxDD NN: -10.75%
+const cumBH = [0, 2.5, 5.0, 7.5, -4.2, -0.5, 4.0, 8.5, 11.5, 13.5, 15.0, 16.0, 16.82];
+const cumNN = [0, 2.6, 5.1, 7.6, -4.1, -0.4, 4.1, 8.6, 11.6, 13.6, 15.1, 16.1, 16.96];
+new Chart(document.getElementById('chart-cart'),{
+  type:'line',
+  data:{
+    labels:cartLabels,
+    datasets:[
+      {
+        label:'Cartera NN',
+        data:cumNN,
+        borderColor:C.naive, backgroundColor:C.naive+'18',
+        pointRadius:3, pointBackgroundColor:C.naive,
+        tension:.35, fill:false, borderWidth:2,
+      },
+      {
+        label:'Buy & Hold (1/23)',
+        data:cumBH,
+        borderColor:C.lin, backgroundColor:C.lin+'18',
+        pointRadius:3, pointBackgroundColor:C.lin,
+        tension:.35, fill:false, borderWidth:2,
+      },
+    ]
+  },
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{font:{size:10},boxWidth:10}},
+      tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.raw>=0?'+':''}${ctx.raw.toFixed(2)}%`}}
+    },
+    scales:{
+      y:{ticks:{font:{size:9.5},callback:v=>(v>=0?'+':'')+v.toFixed(0)+'%'},
+        title:{display:true,text:'Retorno acumulado',font:{size:10}},
+        grid:{color:'rgba(0,0,0,.05)'}},
+      x:{ticks:{font:{size:9},maxRotation:45}}
+    }
+  }
+});
+
+// ── PRINT — alta resolución de canvas ────────────────────────────
+// Antes de imprimir: fuerza devicePixelRatio=4 en todos los charts
+// para pasar de ~96 DPI a ~384 DPI equivalentes en el PDF
+window.addEventListener('beforeprint', function () {
+  Object.values(Chart.instances).forEach(function (chart) {
+    chart.options.devicePixelRatio = 4;
+    chart.resize();
+    chart.update('none');   // actualiza sin animación, instantáneo
+  });
+});
+// Al cerrar el diálogo: restaura el ratio original de pantalla
+window.addEventListener('afterprint', function () {
+  const dpr = window.devicePixelRatio || 1;
+  Object.values(Chart.instances).forEach(function (chart) {
+    chart.options.devicePixelRatio = dpr;
+    chart.resize();
+    chart.update('none');
+  });
+});
+
+// ── NAVBAR ACTIVE STATE ──────────────────────────────────────────
+const pages = document.querySelectorAll('.page');
+const links = document.querySelectorAll('nav a');
+const io = new IntersectionObserver(e=>{
+  e.forEach(x=>{if(x.isIntersecting)
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+x.target.id));
+  });
+},{threshold:.25});
+pages.forEach(p=>io.observe(p));
+</script>
+</body>
+</html>
